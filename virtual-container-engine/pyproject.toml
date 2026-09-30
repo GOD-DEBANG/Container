@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "virtual-container-engine"
+version = "1.0.0"
+description = "CPU-first Virtual Container dataset generation and processing engine"
+requires-python = ">=3.12"
+dependencies = [
+    "psutil>=5.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov>=4.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "container_core*",
+    "models*",
+    "layer1_hierarchical*",
+    "layer2_processing*",
+    "layer3_reconstruction*",
+    "cpu_engine*",
+    "resource_engine*",
+    "mathematics*",
+    "execution*",
+    "storage*",
+    "services*",
+]
+# NOTE: output/ is intentionally excluded — it is a removable adapter.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
