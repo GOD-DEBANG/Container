@@ -1,0 +1,138 @@
+# PULSE Server + Virtual Container Engine
+
+**Version:** 0.1.0 · **Python 3.12** · **Vercel Serverless (no Docker)**
+
+An integrated, production-quality Python server with a built-in dataset-generation
+engine. Deployable to Vercel without Docker; fully tested (44/44 passing); all
+benchmarks measured from real execution.
+
+---
+
+## Quick Start
+
+```bash
+cd Server/
+pip install -r requirements.txt
+cp .env.example .env          # fill in PULSE_SECRET_KEY and Ed25519 keys
+PYTHONPATH=src uvicorn pulse.app:app --port 8000 --reload
+```
+
+Run tests:
+```bash
+python -m pytest tests/ -v    # 44 passed
+```
+
+Run benchmarks:
+```bash
+PYTHONPATH=src python scripts/run_benchmarks.py
+```
+
+---
+
+## Architecture at a Glance
+
+```
+api/index.py  (Vercel ASGI entrypoint)
+    │
+    ├── Subsystem A — PULSE Server
+    │     CompiledRouter → Cell Pipeline → State Fabric → SSE Streaming
+    │
+    └── Subsystem B — VDC Engine
+          Layer 1 (Allocation) → Layer 2 (Processing) → Layer 3 (Reconstruction)
+          Mathematics Package (pure functions) · Resource Engine · Adaptive Scheduler
+```
+
+Full architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+
+---
+
+## Measured Performance (real numbers, Python 3.12, x86-64)
+
+| Component | Result |
+|-----------|--------|
+| Trie router p50 | **0.001 ms** |
+| Trie router throughput | **~700,000 matches/sec** |
+| Ed25519 sign p50 | **0.039 ms** |
+| AES-256-GCM | **~1,800 MB/s** |
+| Server warm p50 | **0.23 ms** |
+| Server throughput | **~4,000 req/sec** |
+| VDC 10 MB job end-to-end | **~28 MB/s** |
+
+Full results: [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md)
+
+---
+
+## Project Structure
+
+```
+Server/
+├── api/index.py              # Vercel entrypoint
+├── src/
+│   ├── pulse/                # Subsystem A: ASGI server
+│   └── vdc/                  # Subsystem B: VDC engine
+├── tests/                    # 44 tests: unit, integration, security, vdc
+├── bench/benchmark.py        # Benchmark runner (JSON output)
+├── clients/                  # Python + JavaScript SDKs
+├── docs/                     # Architecture, Threat Model, Deployment, Benchmarks
+├── examples/console_output.py
+├── scripts/run_benchmarks.py
+├── vercel.json
+├── requirements.txt
+└── pyproject.toml
+```
+
+---
+
+## API Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/health` | — | Health check |
+| `POST` | `/token` | — | Issue Bearer token |
+| `POST` | `/jobs` | Bearer | Submit dataset generation job |
+| `GET` | `/jobs/{job_id}` | Bearer | Job status + result |
+| `GET` | `/jobs/{job_id}/stream` | Bearer | SSE progress stream |
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Full system architecture, component layout, ASGI conformance |
+| [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) | STRIDE threat catalogue, mitigations, test mapping |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Local dev + Vercel deployment guide, API usage |
+| [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md) | All measured benchmark results with reproduction instructions |
+| [`docs/VERCEL_CONSTRAINTS.md`](docs/VERCEL_CONSTRAINTS.md) | Verified Vercel runtime constraints and architectural consequences |
+
+---
+
+## Vercel Deployment
+
+```bash
+vercel env add PULSE_SECRET_KEY production
+vercel env add PULSE_ED25519_PRIVATE_KEY production
+vercel env add PULSE_ED25519_PUBLIC_KEY production
+vercel --prod
+```
+
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full guide.
+
+---
+
+## Security
+
+- **Ed25519** request body signatures (sign + verify every request/response)
+- **AES-256-GCM** hybrid envelope encryption
+- **HMAC-SHA256** Bearer tokens with expiry
+- **Sliding-window nonce** replay prevention (5-min window)
+- **SHA-256** dataset integrity checksums
+- **Cross-tenant isolation** via scoped job keys
+
+Full threat model: [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)
+
+---
+
+## License
+
+MIT

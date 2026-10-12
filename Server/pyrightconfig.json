@@ -1,0 +1,12 @@
+{
+  "pythonVersion": "3.12",
+  "extraPaths": [
+    ".",
+    "src"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    ".ruff_cache",
+    ".pytest_cache"
+  ]
+}
