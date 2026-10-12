@@ -10,12 +10,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Ensure src and root are in sys.path
-root_dir = str(Path(__file__).resolve().parent.parent)
+# Ensure src/ is on sys.path (bench, pulse, vdc all live under src/)
 src_dir = str(Path(__file__).resolve().parent.parent / "src")
-for d in (root_dir, src_dir):
-    if d not in sys.path:
-        sys.path.insert(0, d)
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
 from bench.benchmark import run_all_benchmarks
 
