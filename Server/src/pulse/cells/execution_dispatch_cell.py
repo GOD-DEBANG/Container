@@ -15,6 +15,7 @@ from typing import Optional
 from ..core.pipeline import BaseCell, PulseContext
 from ..core.pulse import Pulse
 from ..fabric.store_interface import StoreInterface
+from ..ml.policy_model import ML_FEEDBACK_STORE_KEY
 from vdc.services.dataset_generation_service import DatasetGenerationService
 from vdc.resource_engine.resource_budget import ExecutionPolicy
 
@@ -35,7 +36,9 @@ class ExecutionDispatchCell(BaseCell):
         self.max_duration_seconds = max_duration_seconds
 
     async def process(self, context: PulseContext) -> PulseContext:
-        job_id = context.state.get("job_id")
+        job_id: str | None = context.state.get("job_id")
+        if job_id is None:
+            raise ValueError("ExecutionDispatchCell: 'job_id' is missing from context state")
         params = context.state.get("validated_params", {})
         backend = params.get("backend", "INLINE")
 
@@ -106,17 +109,44 @@ class ExecutionDispatchCell(BaseCell):
                 },
             )
 
+            # Persist training sample so AdaptivePolicyCell can learn from this run.
+            await self.store.append_event(
+                ML_FEEDBACK_STORE_KEY,
+                {
+                    "event_type": "ml_training_sample",
+                    "features": {
+                        "target_size_bytes": params.get("target_size_bytes"),
+                        "chunk_size_bytes": params.get("chunk_size_bytes"),
+                        "subchunk_size_bytes": params.get("subchunk_size_bytes"),
+                        "seed": params.get("seed"),
+                        "policy": params.get("policy"),
+                    },
+                    "outcomes": {
+                        "total_elapsed_seconds": report.metrics.total_elapsed_seconds,
+                        "generation_throughput_bps": report.metrics.measured_generation_throughput_bytes_per_sec,
+                        "persistence_throughput_bps": report.metrics.measured_persistence_throughput_bytes_per_sec,
+                        "actual_generated_bytes": report.metrics.actual_generated_bytes,
+                        "limiting_resource": report.metrics.limiting_resource,
+                        "success": report.success,
+                    },
+                    "timestamp": time.time(),
+                },
+            )
+
             context.state["execution_report"] = report
             context.state["final_job_data"] = final_job_data
 
         elif backend == "DURABLE_WORKER":
-            # For durable worker mode, job is enqueued
-            update = {
-                "status": "QUEUED_DURABLE",
-                "queue_name": "pulse-jobs-durable",
-                "updated_at_utc": time.time(),
-            }
-            await self.store.save_job(job_id, update)
-            context.state["final_job_data"] = update
+            # DURABLE_WORKER requires a real queue backend (e.g. Upstash QStash, Celery).
+            # Raise explicitly so this is never silently treated as a no-op.
+            raise NotImplementedError(
+                "DURABLE_WORKER backend is not yet implemented. "
+                "Integrate a queue provider (e.g. QStash, Celery) before enabling this mode."
+            )
+
+        else:
+            # Guard: should never be reached because ResourcePolicyCell and
+            # RequestValidationCell already reject unknown backends.
+            raise ValueError(f"ExecutionDispatchCell: unhandled backend '{backend}'")
 
         return context

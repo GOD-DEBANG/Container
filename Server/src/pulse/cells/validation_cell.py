@@ -43,8 +43,8 @@ class RequestValidationCell(BaseCell):
             raise ValidationError(f"Invalid policy '{policy_str}'. Supported: LOW_CPU, BALANCED, PERFORMANCE")
 
         backend_str = payload.get("backend", "INLINE").upper()
-        if backend_str not in ("INLINE", "DURABLE_WORKER", "LOCAL"):
-            raise ValidationError(f"Invalid backend '{backend_str}'. Supported: INLINE, DURABLE_WORKER, LOCAL")
+        if backend_str not in ("INLINE", "DURABLE_WORKER"):
+            raise ValidationError(f"Invalid backend '{backend_str}'. Supported: INLINE, DURABLE_WORKER")
 
         context.state["validated_params"] = {
             "target_size_bytes": target_size,

@@ -40,9 +40,11 @@ from .cells.validation_cell import RequestValidationCell
 from .cells.resource_policy_cell import ResourcePolicyCell
 from .cells.job_creation_cell import JobCreationCell
 from .cells.execution_dispatch_cell import ExecutionDispatchCell
+from .cells.adaptive_policy_cell import AdaptivePolicyCell
 from .cells.result_auth_cell import ResultAuthCell
 from .cells.error_cell import ErrorNormalizationCell
 from .cells.response_encoding_cell import ResponseEncodingCell
+from .ml.policy_model import PolicyModel
 from vdc.services.dataset_generation_service import DatasetGenerationService
 
 
@@ -60,12 +62,13 @@ class PulseASGIApp:
             try:
                 self.store: StoreInterface = UpstashRedisStore(config.redis_url)
             except Exception as e:
-                logger.warning("Failed to connect to Upstash Redis; falling back to MemoryStore: %s", e)
+                logger.warning("Failed to connect to Upstash Redis; falling back to MemoryStore", error=str(e))
                 self.store = MemoryStore()
         else:
             self.store = MemoryStore()
 
         self.generation_service = DatasetGenerationService(config.storage_root)
+        self.policy_model = PolicyModel()   # shared, retrained by AdaptivePolicyCell
         self.registry = CellRegistry()
         self.router = CompiledRouter()
 
@@ -78,7 +81,12 @@ class PulseASGIApp:
         self.registry.register("signature", lambda: SignatureVerificationCell(), prewarm=True)
         self.registry.register("replay", lambda: ReplayProtectionCell(self.replay_guard), prewarm=True)
         self.registry.register("validation", lambda: RequestValidationCell(), prewarm=True)
-        self.registry.register("policy", lambda: ResourcePolicyCell(self.config.max_inline_dataset_bytes), prewarm=True)
+        self.registry.register(
+            "adaptive_policy",
+            lambda: AdaptivePolicyCell(self.store, self.policy_model),
+            prewarm=True,
+        )
+        self.registry.register("policy", lambda: ResourcePolicyCell(self.config.max_inline_dataset_bytes, self.config.backend), prewarm=True)
         self.registry.register("job_create", lambda: JobCreationCell(self.store), prewarm=True)
         self.registry.register(
             "dispatch",
@@ -121,6 +129,11 @@ class PulseASGIApp:
                 "status": "healthy",
                 "timestamp_utc": time.time(),
                 "metrics": metrics.get_summary(),
+                "adaptive_policy": {
+                    "model_trained": self.policy_model.is_trained,
+                    "training_samples": self.policy_model.n_samples,
+                    "min_samples_required": 10,
+                },
             },
             request_id=pulse.request_id,
         )
@@ -149,6 +162,7 @@ class PulseASGIApp:
             pipeline.add_cell(self.registry.get_cell("replay"))
 
         pipeline.add_cell(self.registry.get_cell("validation"))
+        pipeline.add_cell(self.registry.get_cell("adaptive_policy"))  # ML policy override
         pipeline.add_cell(self.registry.get_cell("policy"))
         pipeline.add_cell(self.registry.get_cell("job_create"))
         pipeline.add_cell(self.registry.get_cell("dispatch"))
@@ -362,7 +376,7 @@ class PulseASGIApp:
             await self._send_json_error(send, pe)
         except Exception as exc:
             metrics.increment("http_errors_total")
-            logger.error("Unhandled ASGI error: %s", exc)
+            logger.error("Unhandled ASGI error", error=str(exc))
             await self._send_json_error(send, PulseError(f"Internal server error: {str(exc)}"))
 
     async def _send_pulse_response(self, send: Callable, pulse: Pulse, accept: str) -> None:

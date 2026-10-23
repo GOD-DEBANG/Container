@@ -78,5 +78,5 @@ class TestVirtualContainer:
         with ContainerFactory.create("huge_job", oversized_spec, budget, tmp_path / "out") as c:
             report = c.run()
             assert report.success is False
-            assert "rejected" in report.error.lower()
+            assert report.error is not None and "rejected" in report.error.lower()
             assert c.lifecycle.current_state == ContainerState.RESOURCE_BLOCKED

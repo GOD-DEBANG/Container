@@ -205,6 +205,10 @@ class VirtualContainer:
                 self.metrics.actual_generated_bytes, total_elapsed
             )
 
+        # Clean up temporary storage now so the report reflects the real outcome.
+        # __exit__ will call destroy() again, but CleanupManager.is_cleaned makes it a no-op.
+        cleanup_ok = self.destroy()
+
         return ExecutionReport(
             container_id=self.container_id,
             job_id=self.job_id,
@@ -216,7 +220,7 @@ class VirtualContainer:
             checksum_sha256=checksum,
             chunks_processed=chunks_count,
             subchunks_processed=subchunks_count,
-            cleanup_successful=False,
+            cleanup_successful=cleanup_ok,
             error=error_msg,
         )
 

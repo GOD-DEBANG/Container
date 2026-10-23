@@ -47,8 +47,8 @@ class MetricsRegistry:
                     continue
                 sorted_vals = sorted(values)
                 n = len(sorted_vals)
-                p50 = sorted_vals[int(math.ceil(0.50 * n)) - 1]
-                p99 = sorted_vals[int(math.ceil(0.99 * n)) - 1]
+                p50 = sorted_vals[math.ceil(0.50 * n) - 1]
+                p99 = sorted_vals[math.ceil(0.99 * n) - 1]
                 avg = sum(sorted_vals) / n
                 summary["latencies"][name] = {
                     "count": n,
