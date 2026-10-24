@@ -1,8 +1,8 @@
 """
 api/index.py
 
-Thin Vercel ASGI Entrypoint.
-Exposes top-level `app` callable adhering to Vercel Python runtime discovery.
+Vercel ASGI Entrypoint with robust runtime path resolution.
+Discovers and exposes the top-level `app` callable for Vercel Serverless.
 """
 
 from __future__ import annotations
@@ -10,15 +10,40 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Ensure both Server/src and top-level workspace root (for vdc and ml) are on sys.path
-server_dir = Path(__file__).resolve().parent.parent
-src_dir = str(server_dir / "src")
-repo_root = str(server_dir.parent)
+# In Vercel serverless functions, the current file is inside the repository.
+# Add all possible candidate roots so dependencies (pulse, vdc, ml) are always resolved.
+current_file = Path(__file__).resolve()
+server_dir = current_file.parent.parent
 
-for p in (src_dir, repo_root):
-    if p not in sys.path:
-        sys.path.insert(0, p)
+candidate_paths = [
+    server_dir / "src",     # For 'pulse' package
+    server_dir.parent,      # Workspace root for 'vdc', 'ml', 'datasets_hub'
+    server_dir,             # Server directory itself
+]
 
-from pulse.app import app  # noqa: E402
+for p in candidate_paths:
+    str_p = str(p)
+    if str_p not in sys.path and p.exists():
+        sys.path.insert(0, str_p)
+
+# Import the core ASGI Pulse application
+try:
+    from pulse.app import app
+except Exception as e:
+    # Diagnostic fallback for Vercel invocation debugging
+    async def app(scope, receive, send):
+        if scope["type"] == "http":
+            import json
+            err_payload = json.dumps({
+                "error": True,
+                "message": f"Server bootstrap error: {str(e)}",
+                "sys_path": sys.path[:5]
+            }).encode("utf-8")
+            await send({
+                "type": "http.response.start",
+                "status": 500,
+                "headers": [(b"content-type", b"application/json")]
+            })
+            await send({"type": "http.response.body", "body": err_payload})
 
 __all__ = ["app"]
