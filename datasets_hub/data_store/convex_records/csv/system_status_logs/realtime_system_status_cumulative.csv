@@ -1,0 +1,5 @@
+timestamp,subsystem,status,latency_ms,throughput_bps,error
+1792835204.31765,VirtualContainer,HEALTHY,259.73,1699474.8782080812,none
+1792835204.5768523,PulseServer,HEALTHY,392.14,0,none
+1792835948.6675367,VirtualContainer,HEALTHY,204.6,1764210.2429853424,none
+1792835948.871591,PulseServer,HEALTHY,392.74,0,none

@@ -1,0 +1,20 @@
+[
+  {
+    "generation": 1,
+    "hidden_dim": 16,
+    "architecture_version": 1,
+    "metrics": {
+      "val_loss": 0.10953734217564982,
+      "val_accuracy": 0.9466666666666667
+    }
+  },
+  {
+    "generation": 2,
+    "hidden_dim": 19,
+    "architecture_version": 2,
+    "metrics": {
+      "val_loss": 0.07371630805742438,
+      "val_accuracy": 0.98
+    }
+  }
+]

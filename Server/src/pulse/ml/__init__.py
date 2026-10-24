@@ -1,6 +1,8 @@
-"""
-src/pulse/ml/__init__.py
+ï»¿from .policy_model import PolicyModel, ML_FEEDBACK_STORE_KEY
+from .evolution_service import ContainerMLEvolutionService
 
-Pulse ML subsystem — adaptive policy and feedback learning.
-"""
-
+__all__ = [
+    'PolicyModel',
+    'ML_FEEDBACK_STORE_KEY',
+    'ContainerMLEvolutionService',
+]

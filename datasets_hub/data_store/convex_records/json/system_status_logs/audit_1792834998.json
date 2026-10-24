@@ -1,0 +1,26 @@
+{
+  "record_id": "audit_1792834998",
+  "table": "system_status_logs",
+  "metadata": {
+    "overall_status": "DEGRADED"
+  },
+  "total_records": 2,
+  "data": [
+    {
+      "subsystem": "VirtualContainer",
+      "status": "HEALTHY",
+      "latency_ms": 195.65,
+      "throughput_bps": 1711819.9580972758,
+      "error": "none",
+      "timestamp": 1792834997.9097497
+    },
+    {
+      "subsystem": "PulseServer",
+      "status": "OFFLINE",
+      "latency_ms": -1,
+      "throughput_bps": 0,
+      "error": "'CompiledRouter' object has no attribute 'add'",
+      "timestamp": 1792834998.1057642
+    }
+  ]
+}

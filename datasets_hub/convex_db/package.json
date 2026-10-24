@@ -1,0 +1,12 @@
+{
+  "name": "container-convex-db",
+  "version": "1.0.0",
+  "description": "Convex Database Project for Container Datasets and Realtime Diagnostics",
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy"
+  },
+  "dependencies": {
+    "convex": "^1.48.0"
+  }
+}
