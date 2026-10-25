@@ -1,56 +1,49 @@
+# PULSE Server and Virtual Dataset Container Engine: A Resource-Aware Architecture for Dataset Processing and Governed Machine-Learning Evolution
 
-# PULSE Server + Virtual Dataset Container Engine (VDC)
-
-## Autonomous Synthetic Dataset Processing and Self-Evolving Machine Learning — Engineering Specification
-
-**Document Version:** 2.1  
-**Status:** Engineering specification and implementation blueprint  
-**Prepared:** 25 October 2026  
-**Author:** Debang Chowdhury and Core Scientific Engineering Team  
+**Debang Chowdhury**  
+**Document type:** IEEE-style technical research and system-architecture paper  
+**Version:** 2.2  
+**Date:** 25 October 2026  
 **Repository:** https://github.com/GOD-DEBANG/Container
 
-> **Verification notice:** This document specifies the proposed architecture, mathematical models, implementation requirements, and verification procedures. It does not independently prove that the current source code implements every feature, that performance targets have been achieved, that security isolation is sufficient, or that a standards-compliance assessment has been completed.
+## Abstract
+
+This paper presents the proposed architecture and verification framework for PULSE, an API and coordination service, and the Virtual Dataset Container Engine (VDC), a resource-aware execution layer for dataset ingestion, deterministic partitioning, transformation, validation, recombination, and artifact management. A connected machine-learning subsystem uses versioned datasets to train and evaluate candidate models and permits model promotion only through explicit quality, safety, and operational gates. The design emphasizes byte-conserving partition allocation, bounded resource admission, durable job state, idempotent writes, checkpoint-based recovery, content integrity, observable progress, and reproducible experiments. Mathematical models are provided for chunk allocation, throughput estimation, scheduling, progress, drift detection, training objectives, and storage quotas. The paper also defines trust boundaries, API contracts, deployment constraints, and a traceable verification plan. The equations and architecture describe intended behavior; they are not evidence that a particular implementation already satisfies the requirements. Performance, security, and conformance claims therefore require source inspection, repeatable tests, measured results, and independent review.
+
+**Index Terms—** dataset processing, resource-aware scheduling, virtual execution workspace, data integrity, checkpointing, machine learning, concept drift, model evaluation, system architecture, reproducibility.
+
+> **Evidence and publication note:** This is an IEEE-inspired Markdown manuscript, not an IEEE-published or IEEE-certified paper. The system is described as a proposed design unless supported by implementation evidence. Do not report unmeasured performance results or claim formal standards compliance without the corresponding evidence and review.
 
 ---
+
 
 # Table of Contents
 
-1. Executive Summary
-2. Scope and Terminology
-3. Architecture and System Boundaries
-4. Job Lifecycle and State Machine
-5. Data Model and Persistence
-6. Mathematical Specification
-   - 6.1 Byte-Accurate Chunk Allocation
-   - 6.2 Minimum Chunk Size and Edge Cases
-   - 6.3 Chunk Sizing and Processing Overhead
-   - 6.4 Resource Capacity and Throughput
-   - 6.5 Resource Admission
-   - 6.6 Queue Stability and Scheduling
-   - 6.7 Progress and ETA
-   - 6.8 Retries and Checkpoints
-   - 6.9 Integrity and Manifests
-   - 6.10 Drift Detection
-   - 6.11 ML Training Objective
-   - 6.12 Model Evolution and Regression Control
-   - 6.13 Storage and Quota Accounting
-7. Core Algorithms
-8. API and Module Contracts
-9. Security and Privacy
-10. Failure Handling and Recovery
-11. Observability and SLOs
-12. Testing and Empirical Verification
-13. Deployment and Vercel Constraints
-14. Standards and Traceability
-15. Engineering Assumptions and Limitations
-16. Implementation Roadmap
-17. Equation-to-Code Traceability Matrix
-18. Benchmark Report Template
-19. References
+- [I. Introduction](#i-introduction)
+- [II. System Model, Scope, and Requirements](#ii-system-model-scope-and-requirements)
+- [III. Proposed System Architecture](#iii-proposed-system-architecture)
+  - [Detailed System Architecture Diagram](#311-detailed-system-architecture-diagram)
+- [IV. Job Lifecycle and State Model](#iv-job-lifecycle-and-state-model)
+- [V. Data Model and Persistence](#v-data-model-and-persistence)
+- [VI. Mathematical Model](#vi-mathematical-model)
+- [VII. Core Algorithms](#vii-core-algorithms)
+- [VIII. API and Module Contracts](#viii-api-and-module-contracts)
+- [IX. Security and Privacy](#ix-security-and-privacy)
+- [X. Failure Handling and Recovery](#x-failure-handling-and-recovery)
+- [XI. Observability and Service Objectives](#xi-observability-and-service-objectives)
+- [XII. Verification and Evaluation Methodology](#xii-verification-and-evaluation-methodology)
+- [XIII. Deployment Constraints](#xiii-deployment-constraints)
+- [XIV. Standards and Traceability](#xiv-standards-and-traceability)
+- [XV. Assumptions and Limitations](#xv-assumptions-and-limitations)
+- [XVI. Implementation Roadmap](#xvi-implementation-roadmap)
+- [XVII. Equation-to-Implementation Traceability](#xvii-equation-to-implementation-traceability)
+- [XVIII. Reproducible Benchmark Template](#xviii-reproducible-benchmark-template)
+- [XIX. Conclusion](#xix-conclusion)
+- [References](#references)
 
 ---
 
-# 1. Executive Summary
+# I. Introduction
 
 PULSE is the request-handling and coordination layer. The Virtual Dataset Container Engine (VDC) provides a temporary, resource-aware execution workspace for dataset ingestion, chunking, transformation, validation, recombination, and artifact management.
 
@@ -99,7 +92,7 @@ A virtual workspace is not automatically equivalent to a secure operating-system
 
 ---
 
-# 2. Scope and Terminology
+# II. System Model, Scope, and Requirements
 
 ## 2.1 Definitions
 
@@ -146,7 +139,7 @@ A virtual workspace is not automatically equivalent to a secure operating-system
 
 ---
 
-# 3. Architecture and System Boundaries
+# III. Proposed System Architecture
 
 ## 3.1 Logical Architecture
 
@@ -176,6 +169,193 @@ flowchart TD
     Candidate --> Gate[Evaluation and Approval Gate]
     Gate --> Registry[(Approved Model Registry)]
 ```
+
+## 3.1.1 Detailed System Architecture Diagram
+
+The following diagram expands the logical overview into the principal runtime layers, trust boundaries, persistence paths, and dataset/ML workflows. It is a design-level architecture: deployment-specific services and adapters must be mapped to the actual repository implementation before this figure is treated as an implementation diagram.
+
+```mermaid
+flowchart TB
+    %% External actors and entry points
+    subgraph EXT[External Actors]
+        USER[User / Researcher]
+        SDK[SDK / CLI / API Client]
+        IDP[Configured Identity Provider]
+    end
+
+    subgraph EDGE[Presentation and API Boundary]
+        UI[Dashboard / Web UI]
+        EDGEAPI[HTTPS Entry Point]
+        GW[PULSE API Gateway]
+        AUTH[Authentication Adapter]
+        POLICY[Authorization / Tenant Policy]
+        SCHEMA[Request Schema Validation]
+        LIMITS[Rate Limits / Payload Limits / Quotas]
+    end
+
+    subgraph CONTROL[Control Plane - Durable Coordination]
+        JOBS[Job Service]
+        IDEM[Idempotency-Key Handler]
+        STATE[Job State Machine]
+        SCHED[Scheduler and Admission Controller]
+        FAIR[Priority / Fairness / Backpressure]
+        LEASE[Worker Lease and Heartbeat Manager]
+        CANCEL[Cancellation / Timeout Manager]
+        AUDIT[Audit Event Writer]
+    end
+
+    subgraph STATESTORE[Durable Metadata Plane]
+        DB[(Job / Tenant / Policy Metadata Store)]
+        MANIFEST[(Dataset and Artifact Manifest Store)]
+        REGISTRY[(Model and Experiment Registry)]
+        OUTBOX[(Outbox / Reconciliation Records)]
+    end
+
+    subgraph EXEC[Execution Plane - VDC]
+        ADAPTER[Worker Adapter]
+        WSM[Workspace Lifecycle Manager]
+        BUDGET[Resource Budget and Admission Check]
+        INGEST[Ingestion and Format Validation]
+        PLAN[Deterministic Chunk Planner]
+        QUEUE[Bounded Chunk Queue]
+        CLAIM[Chunk Claim / Lease Check]
+        TRANSFORM[Transform / Parse / Filter]
+        VALIDATE[Chunk Schema and Output Validation]
+        CHECKPOINT[Checkpoint Manager]
+        RECOMBINE[Deterministic Recombination]
+        FINALCHECK[Final Integrity and Completeness Check]
+        COMMIT[Atomic Logical Commit]
+    end
+
+    subgraph OBJECTS[Durable Artifact Storage]
+        INPUTS[(Input Objects)]
+        TEMP[(Attempt-Scoped Temporary Artifacts)]
+        OUTPUTS[(Committed Dataset Objects)]
+        CHECKPOINTS[(Checkpoint and Recovery Objects)]
+    end
+
+    subgraph ML[Machine-Learning Experiment Plane]
+        PREP[Dataset Snapshot / Split Preparation]
+        TRAIN[Training Worker]
+        EVAL[Evaluation and Baseline Comparison]
+        DRIFT[Drift / Data-Quality Analysis]
+        GATE{All Promotion Gates Pass?}
+        CANDIDATE[(Candidate Model Artifacts)]
+        APPROVED[(Approved Model Versions)]
+        ROLLBACK[Rollback / Previous Version Pointer]
+    end
+
+    subgraph OBS[Cross-Cutting Operations and Security]
+        SECRETS[Secret and Credential Provider]
+        TELEMETRY[Metrics / Logs / Traces]
+        ALERTS[Alerting / SLO Evaluation]
+        CLEANUP[TTL Cleanup and Orphan Reconciliation]
+    end
+
+    USER --> UI
+    SDK --> EDGEAPI
+    UI --> EDGEAPI
+    EDGEAPI --> GW
+    GW --> AUTH
+    AUTH <--> IDP
+    AUTH --> POLICY
+    POLICY --> SCHEMA
+    SCHEMA --> LIMITS
+    LIMITS --> IDEM
+    IDEM --> JOBS
+    JOBS --> STATE
+    STATE --> DB
+    JOBS --> AUDIT
+    JOBS --> SCHED
+    SCHED --> FAIR
+    FAIR --> QUEUE
+    SCHED --> LEASE
+    SCHED --> DB
+    CANCEL --> STATE
+    LEASE --> CLAIM
+
+    INPUTS --> INGEST
+    QUEUE --> CLAIM
+    ADAPTER --> WSM
+    WSM --> BUDGET
+    BUDGET --> INGEST
+    INGEST --> PLAN
+    PLAN --> QUEUE
+    CLAIM --> TRANSFORM
+    TRANSFORM --> VALIDATE
+    VALIDATE -->|valid attempt output| TEMP
+    VALIDATE --> CHECKPOINT
+    CHECKPOINT --> CHECKPOINTS
+    CHECKPOINT --> MANIFEST
+    TEMP --> RECOMBINE
+    RECOMBINE --> FINALCHECK
+    FINALCHECK -->|passes| COMMIT
+    COMMIT --> OUTPUTS
+    COMMIT --> MANIFEST
+    COMMIT --> STATE
+    COMMIT --> OUTBOX
+    OUTBOX --> CLEANUP
+    CLEANUP --> TEMP
+    CLEANUP --> CHECKPOINTS
+
+    OUTPUTS --> PREP
+    MANIFEST --> PREP
+    PREP --> TRAIN
+    TRAIN --> CANDIDATE
+    TRAIN --> EVAL
+    CANDIDATE --> EVAL
+    PREP --> DRIFT
+    EVAL --> GATE
+    DRIFT --> GATE
+    GATE -->|yes| APPROVED
+    GATE -->|no| CANDIDATE
+    APPROVED --> REGISTRY
+    REGISTRY --> ROLLBACK
+    ROLLBACK --> APPROVED
+
+    AUTH -. scoped credentials .-> SECRETS
+    ADAPTER -. scoped credentials .-> SECRETS
+    GW --> TELEMETRY
+    JOBS --> TELEMETRY
+    SCHED --> TELEMETRY
+    ADAPTER --> TELEMETRY
+    COMMIT --> TELEMETRY
+    TRAIN --> TELEMETRY
+    TELEMETRY --> ALERTS
+    AUDIT --> DB
+
+    classDef boundary fill:#eef2ff,stroke:#4f46e5,color:#111827;
+    classDef durable fill:#ecfdf5,stroke:#059669,color:#111827;
+    classDef execution fill:#fff7ed,stroke:#c2410c,color:#111827;
+    classDef ml fill:#f5f3ff,stroke:#7c3aed,color:#111827;
+    classDef ops fill:#f3f4f6,stroke:#4b5563,color:#111827;
+    class EDGE,EXT boundary;
+    class STATESTORE,OBJECTS durable;
+    class EXEC,CONTROL execution;
+    class ML ml;
+    class OBS ops;
+```
+
+### Architecture interpretation
+
+- **Request path:** clients enter through the HTTPS boundary; authentication, tenant authorization, schema validation, rate limits, and quotas run before a job is accepted.
+- **Durable acceptance:** the job and idempotency record are persisted before the API reports asynchronous acceptance. The HTTP request lifetime is not the job lifetime.
+- **Control plane:** the scheduler manages queue pressure, resource admission, leases, retries, cancellation, and state transitions. It coordinates work but should not carry large dataset payloads through metadata records.
+- **VDC execution plane:** the worker adapter creates a job-scoped workspace; ingestion validates input; the planner produces stable chunk descriptors; workers create attempt-scoped outputs; validators and checkpoints make retries recoverable.
+- **Commit boundary:** outputs remain temporary until recombination, completeness checks, and integrity validation pass. A manifest/version update then makes the result visible as a committed dataset.
+- **ML plane:** training and evaluation operate on an identified dataset snapshot. Candidate artifacts are separate from approved models. Promotion requires explicit gates, and rollback metadata is retained.
+- **Storage separation:** metadata and manifests store references and state; object storage holds large input, temporary, checkpoint, output, and model artifacts. Exact storage products are deployment choices.
+- **Cross-cutting controls:** scoped credentials, audit records, telemetry, alerts, TTL cleanup, and orphan reconciliation apply across the system.
+
+### Required consistency invariants
+
+1. A job is not reported as accepted until its durable job record exists.
+2. A worker may modify only artifacts associated with its authorized tenant, job, chunk, and attempt.
+3. A retry must not overwrite a committed result from a different successful attempt without an explicit versioned commit rule.
+4. A dataset version is visible only after all required outputs pass validation and the manifest commit succeeds.
+5. Candidate model artifacts cannot become approved model versions without recorded evaluation evidence and a successful promotion decision.
+6. Cleanup must not delete objects referenced by a committed manifest; orphan cleanup must use a grace period and reference checks.
+7. Queue length, concurrency, execution duration, memory, storage, and tenant quotas must be bounded by explicit policy.
 
 ## 3.2 PULSE API Gateway
 
@@ -250,7 +430,95 @@ Drift detection is not, by itself, evidence that retraining will improve a model
 
 ---
 
-# 4. Job Lifecycle and State Machine
+## 3.8 Control Plane and Data Plane Separation
+
+The control plane manages identity, request validation, job state, admission decisions, leases, cancellation, quotas, and audit records. The data plane performs byte movement, parsing, chunk transformations, validation, recombination, and model computation. This separation reduces coupling between request latency and long-running work and makes it possible to recover a job without relying on the lifetime of the original HTTP request.
+
+The control plane should persist a job before acknowledging asynchronous acceptance. Workers should receive a job identifier and a narrowly scoped authorization context rather than arbitrary client-supplied storage paths. The data plane should write attempt-scoped temporary artifacts and expose them as committed outputs only after validation and a durable manifest update.
+
+```mermaid
+flowchart LR
+    subgraph CP[Control Plane]
+        GW[API Gateway] --> IAM[Identity and Policy]
+        IAM --> JDB[(Job and Lease Store)]
+        JDB --> SCH[Scheduler and Admission]
+        SCH --> Q[Bounded Work Queue]
+        OBS[Audit and Telemetry]
+    end
+    subgraph DP[Data Plane]
+        WA[Worker Adapter] --> WS[Temporary Workspace]
+        WS --> PARSE[Parse and Validate]
+        PARSE --> PART[Partition and Transform]
+        PART --> ART[Attempt-Scoped Artifacts]
+        ART --> HASH[Integrity Verification]
+        HASH --> MAN[(Manifest and Object Store)]
+    end
+    Q --> WA
+    GW --> OBS
+    SCH --> OBS
+    WA --> OBS
+    MAN --> JDB
+```
+
+## 3.9 Component Responsibilities and Contracts
+
+| Component | Input | Output | Required invariant | Failure owner |
+|---|---|---|---|---|
+| API gateway | Authenticated request | Validated command or error | Never reports completion before durable completion | API layer |
+| Identity and policy | Principal, tenant, action, resource | Allow/deny decision | Default deny; ownership checked on every access | Security layer |
+| Job store | Job transition with version | Durable state transition | Compare-and-swap or equivalent prevents stale overwrites | Persistence layer |
+| Scheduler | Queued job and resource estimate | Lease/admission decision | Concurrency and quota limits are not exceeded | Scheduler |
+| Workspace manager | Job ID and expiry policy | Isolated logical workspace | Every artifact is scoped to a job and tenant | VDC layer |
+| Chunk planner | Input manifest and partition policy | Stable chunk descriptors | Byte conservation and deterministic ordering | Data-processing layer |
+| Worker | Lease, chunk descriptor, transform version | Attempt-scoped output | Retry cannot corrupt an already committed result | Worker layer |
+| Manifest service | Validated artifact metadata | New immutable dataset version | Incomplete outputs are not published | Data layer |
+| ML evaluator | Dataset version and candidate model | Metrics and gate decision | Evaluation inputs and metrics are recorded | ML layer |
+| Model registry | Approved candidate and review evidence | Promoted model version | Promotion is auditable and reversible | Governance layer |
+
+## 3.10 End-to-End Data Flow
+
+1. The client submits a request with an idempotency key, operation type, dataset reference, and declared resource limits.
+2. PULSE authenticates the principal, checks tenant ownership and policy, validates the schema, and enforces request and storage quotas.
+3. PULSE persists the job and returns its identifier only after the acceptance record is durable.
+4. The scheduler evaluates concurrency, estimated resource demand, priority, and queue pressure. It grants a lease or leaves the job queued.
+5. VDC creates a job-scoped temporary workspace and records its expiration and cleanup policy.
+6. The ingestion layer validates object metadata and, where required, content format and checksum.
+7. The chunk planner produces deterministic descriptors containing stable IDs, source ranges or record ranges, transform version, and expected output metadata.
+8. Workers claim chunks with lease tokens and write attempt-scoped outputs. Heartbeats and checkpoints update durable state.
+9. A validator checks chunk completeness, schema constraints, byte or record counts, and checksums before accepting each result.
+10. The recombination stage orders accepted outputs deterministically and creates a candidate output manifest.
+11. The commit procedure publishes an immutable dataset version only after all required outputs pass validation. Readers must not observe a partially committed dataset.
+12. PULSE records terminal status and telemetry. Temporary artifacts are removed according to retention policy, while durable outputs and audit records follow their own retention rules.
+13. For an ML experiment, the evaluator records dataset/model/configuration versions and metrics. A candidate is promoted only if every required evaluation gate passes.
+
+## 3.11 Deployment Topology and Platform Constraints
+
+The logical architecture is independent of a particular cloud provider, but process lifetime, payload size, writable filesystem behavior, execution duration, memory, concurrency, and network limits are provider-specific. A serverless API function should generally coordinate work rather than act as an unlimited long-running worker. If a platform imposes execution limits incompatible with a task, the task must be split into resumable units or executed by a separate worker service designed for that workload.
+
+```mermaid
+flowchart TB
+    Browser[Browser / SDK] --> Edge[HTTPS Endpoint]
+    Edge --> Functions[API Functions / Control Plane]
+    Functions --> AuthSvc[Authentication Provider]
+    Functions --> DB[(Transactional Metadata Store)]
+    Functions --> Queue[Queue or Durable Work Table]
+    Queue --> Workers[Resumable Workers]
+    Workers --> Blob[(Object / Blob Storage)]
+    Workers --> DB
+    Workers --> Telemetry[Logs, Metrics, Traces]
+    DB --> UI[Status and Audit Views]
+    Blob --> UI
+```
+
+This diagram is a deployment pattern, not a claim that all components are already provisioned. The actual repository and deployment configuration must be inspected to determine which boxes exist and which are only planned. If a durable queue is unavailable, a database-backed claim/lease table may be used only if its transaction and contention behavior are tested. Local temporary storage must not be treated as durable across serverless invocations.
+
+## 3.12 Consistency and Commit Protocol
+
+The system should treat output publication as a transaction across logical metadata, even when object storage and the metadata database do not share a physical transaction. A safe pattern is: (a) write immutable attempt artifacts, (b) verify them, (c) write a candidate manifest, (d) atomically compare-and-swap the dataset's current version or create a new immutable version, and (e) mark the job complete. If the process crashes between these steps, reconciliation identifies unreferenced artifacts and incomplete candidate manifests without exposing them as committed datasets.
+
+The protocol must define whether concurrent jobs may update the same logical dataset. A conservative default is immutable dataset versions plus an explicit expected-parent-version field. If the parent version has changed, the commit should fail with a conflict or require a deliberate merge; it should not silently overwrite another job's result.
+
+# IV. Job Lifecycle and State Model
 
 ```mermaid
 stateDiagram-v2
@@ -338,7 +606,7 @@ Use a transaction, conditional write, or compare-and-swap mechanism to prevent d
 
 ---
 
-# 5. Data Model and Persistence
+# V. Data Model and Persistence
 
 ## 5.1 Suggested Entities
 
@@ -407,28 +675,28 @@ If metadata and object bytes live in different systems, use immutable object ref
 
 ---
 
-# 6. Mathematical Specification
+# VI. Mathematical Model
 
 ## 6.1 Notation
 
 | Symbol | Meaning | Unit |
 |---|---|---|
-| \(S\) | Total input size | bytes |
-| \(n\) | Number of chunks | count |
-| \(w_i\) | Weight of chunk \(i\) | dimensionless |
-| \(b_i\) | Bytes allocated to chunk \(i\) | bytes |
-| \(V_j(t)\) | Effective rate for resource \(j\) | work units/s |
-| \(V(t)\) | End-to-end effective throughput | work units/s |
-| \(P(t)\) | Estimated progress fraction | fraction |
-| \(C(t)\) | Committed progress fraction | fraction |
-| \(M\) | Number of observations | samples |
-| \(x\) | Feature vector | feature-dependent |
-| \(\mu\) | Baseline feature mean | feature-dependent |
-| \(\Sigma\) | Baseline covariance matrix | feature-dependent |
-| \(\lambda\) | Covariance regularization coefficient | implementation-dependent |
-| \(Q(t)\) | Queue length | jobs |
-| \(\lambda_a\) | Average arrival rate | jobs/s |
-| \(\mu_s\) | Average service rate | jobs/s |
+| $S$ | Total input size | bytes |
+| $n$ | Number of chunks | count |
+| $w_i$ | Weight of chunk $i$ | dimensionless |
+| $b_i$ | Bytes allocated to chunk $i$ | bytes |
+| $V_j(t)$ | Effective rate for resource $j$ | work units/s |
+| $V(t)$ | End-to-end effective throughput | work units/s |
+| $P(t)$ | Estimated progress fraction | fraction |
+| $C(t)$ | Committed progress fraction | fraction |
+| $M$ | Number of observations | samples |
+| $x$ | Feature vector | feature-dependent |
+| $\mu$ | Baseline feature mean | feature-dependent |
+| $\Sigma$ | Baseline covariance matrix | feature-dependent |
+| $\lambda$ | Covariance regularization coefficient | implementation-dependent |
+| $Q(t)$ | Queue length | jobs |
+| $\lambda_a$ | Average arrival rate | jobs/s |
+| $\mu_s$ | Average service rate | jobs/s |
 
 Equations must be implemented with explicit units, assumptions, and validation rules.
 
@@ -438,49 +706,49 @@ Equations must be implemented with explicit units, assumptions, and validation r
 
 ### 6.1.1 Weighted Largest-Remainder Allocation
 
-Given total size \(S\in\mathbb{Z}_{\ge0}\) bytes and weights \(w_i\ge0\), with at least one positive weight:
+Given total size $S\in\mathbb{Z}_{\ge0}$ bytes and weights $w_i\ge0$, with at least one positive weight:
 
-\[
+$$
 W=\sum_{j=1}^{n}w_j
-\]
+$$
 
-\[
+$$
 q_i=S\frac{w_i}{W}
-\]
+$$
 
-\[
+$$
 f_i=\lfloor q_i\rfloor
-\]
+$$
 
-\[
+$$
 r_i=q_i-f_i
-\]
+$$
 
-\[
+$$
 R=S-\sum_{i=1}^{n}f_i
-\]
+$$
 
-Allocate one additional byte to each of the \(R\) chunks with the largest fractional remainders.
+Allocate one additional byte to each of the $R$ chunks with the largest fractional remainders.
 
 The final allocation is:
 
-\[
+$$
 b_i=f_i+\mathbf{1}[i\text{ receives an additional byte}]
-\]
+$$
 
 Resolve equal remainders with a deterministic rule, such as ascending chunk index.
 
 Under the stated conditions:
 
-\[
+$$
 \boxed{\sum_{i=1}^{n}b_i=S}
-\]
+$$
 
 and:
 
-\[
+$$
 b_i\in\mathbb{Z}_{\ge0}
-\]
+$$
 
 This guarantees byte conservation, but it does not guarantee that every chunk is nonempty.
 
@@ -488,58 +756,58 @@ This guarantees byte conservation, but it does not guarantee that every chunk is
 
 If weights are nonnegative integers, define:
 
-\[
+$$
 W=\sum_i w_i
-\]
+$$
 
 For each chunk:
 
-\[
+$$
 a_i=S w_i
-\]
+$$
 
-\[
+$$
 f_i=\left\lfloor\frac{a_i}{W}\right\rfloor
-\]
+$$
 
-\[
+$$
 r_i=a_i\bmod W
-\]
+$$
 
-Then allocate the remaining bytes to the largest integer remainders \(r_i\).
+Then allocate the remaining bytes to the largest integer remainders $r_i$.
 
 This avoids floating-point remainder comparisons and is preferred when deterministic integer weights are available.
 
-Use sufficiently wide integer arithmetic to avoid overflow in \(S w_i\).
+Use sufficiently wide integer arithmetic to avoid overflow in $S w_i$.
 
 ---
 
 ## 6.2 Minimum Chunk Size and Edge Cases
 
-If every chunk must contain at least \(m\) bytes, feasibility requires:
+If every chunk must contain at least $m$ bytes, feasibility requires:
 
-\[
+$$
 \boxed{S\ge nm}
-\]
+$$
 
 Reserve the minimum first:
 
-\[
+$$
 S'=S-nm
-\]
+$$
 
 Then allocate the remaining bytes:
 
-\[
+$$
 b_i=m+\operatorname{LargestRemainder}_i(S',w)
-\]
+$$
 
-If \(S<nm\), the requested configuration is infeasible. Reduce the chunk count, reduce the minimum size, or reject the configuration.
+If $S<nm$, the requested configuration is infeasible. Reduce the chunk count, reduce the minimum size, or reject the configuration.
 
 ### Edge Cases
 
-- If \(S=0\), represent an empty input explicitly.
-- If \(n=0\), accept only when no chunks are required.
+- If $S=0$, represent an empty input explicitly.
+- If $n=0$, accept only when no chunks are required.
 - If all weights are zero, reject or use a documented equal-weight fallback.
 - Reject negative, NaN, or infinite weights.
 - If the requested chunk count exceeds the number of available bytes and nonempty chunks are required, reduce the count or reject the request.
@@ -549,35 +817,35 @@ If \(S<nm\), the requested configuration is infeasible. Reduce the chunk count, 
 
 Represent a chunk using a half-open interval:
 
-\[
+$$
 [a_i,e_i)
-\]
+$$
 
 where:
 
-\[
+$$
 b_i=e_i-a_i
-\]
+$$
 
 For an ordered, gap-free partition:
 
-\[
+$$
 a_1=0
-\]
+$$
 
-\[
+$$
 e_i=a_{i+1}
-\]
+$$
 
-\[
+$$
 e_n=S
-\]
+$$
 
 Therefore:
 
-\[
+$$
 \sum_{i=1}^{n}(e_i-a_i)=S
-\]
+$$
 
 Half-open intervals prevent double-counting boundary bytes.
 
@@ -589,36 +857,36 @@ For CSV, JSON, compressed files, media, and other structured formats, chunk boun
 
 Let:
 
-- \(S\) be total input bytes;
-- \(b\) be target bytes per chunk;
-- \(h\) be fixed overhead per chunk in seconds;
-- \(v\) be measured processing throughput in bytes/s.
+- $S$ be total input bytes;
+- $b$ be target bytes per chunk;
+- $h$ be fixed overhead per chunk in seconds;
+- $v$ be measured processing throughput in bytes/s.
 
 Estimated chunk count:
 
-\[
+$$
 n=\left\lceil\frac{S}{b}\right\rceil
-\]
+$$
 
 Approximate serial execution time:
 
-\[
+$$
 T_{\text{serial}}\approx\frac{S}{v}+nh
-\]
+$$
 
 This is a planning model, not a guaranteed execution time.
 
 Small chunks increase scheduling and metadata overhead. Large chunks increase retry cost and may increase memory requirements.
 
-For a transformation with estimated working-set multiplier \(\alpha\):
+For a transformation with estimated working-set multiplier $\alpha$:
 
-\[
+$$
 M_{\text{required}}\approx\alpha b+M_{\text{fixed}}
-\]
+$$
 
-where \(M_{\text{fixed}}\) includes interpreter, library, and other fixed runtime overhead.
+where $M_{\text{fixed}}$ includes interpreter, library, and other fixed runtime overhead.
 
-Measure \(\alpha\) for each transformation rather than assuming it is one.
+Measure $\alpha$ for each transformation rather than assuming it is one.
 
 ---
 
@@ -643,13 +911,13 @@ RAM capacity is a resource-admission constraint. It is not itself a throughput v
 
 When each resource rate is expressed in the same work unit per second:
 
-\[
+$$
 V_{\text{effective}}(t)\le\min_j V_j(t)
-\]
+$$
 
 A simplified estimate is:
 
-\[
+$$
 \widehat V(t)=
 \min\{
 V_{\text{CPU}}(t),
@@ -658,7 +926,7 @@ V_{\text{storage}}(t),
 V_{\text{network}}(t),
 V_{\text{provider}}(t)
 \}
-\]
+$$
 
 This approximation applies to a simple bottleneck model. Pipelines with overlapping I/O, multiple stages, compression, caching, or different units require a more detailed model.
 
@@ -666,17 +934,17 @@ This approximation applies to a simple bottleneck model. Pipelines with overlapp
 
 A rough CPU-bound estimate is:
 
-\[
+$$
 V_{\text{CPU}}\approx
 \frac{N_{\text{effective}}f_{\text{effective}}\eta}{c}
-\]
+$$
 
 where:
 
-- \(N_{\text{effective}}\): effective parallel cores;
-- \(f_{\text{effective}}\): effective cycles per second per core;
-- \(\eta\): useful-work efficiency, between zero and one;
-- \(c\): estimated CPU cycles per unit of work.
+- $N_{\text{effective}}$: effective parallel cores;
+- $f_{\text{effective}}$: effective cycles per second per core;
+- $\eta$: useful-work efficiency, between zero and one;
+- $c$: estimated CPU cycles per unit of work.
 
 This estimate must be calibrated against actual measurements. Nominal CPU frequency does not guarantee a fixed processing rate.
 
@@ -684,31 +952,31 @@ This estimate must be calibrated against actual measurements. Nominal CPU freque
 
 Estimate network goodput using successful payload bytes over an interval:
 
-\[
+$$
 V_{\text{network}}=
 \frac{\text{successfully transferred payload bytes}}{\Delta t}
-\]
+$$
 
 Track errors, retransmissions, latency, and provider throttling separately.
 
-Do not assume that bandwidth divided by \(1+\text{packet-loss rate}\) is a generally valid throughput formula.
+Do not assume that bandwidth divided by $1+\text{packet-loss rate}$ is a generally valid throughput formula.
 
 ---
 
 ## 6.5 Resource Admission
 
-For every applicable resource \(j\), admission must satisfy:
+For every applicable resource $j$, admission must satisfy:
 
-\[
+$$
 \text{used}_j+\text{reserved}_{j,k}\le\text{budget}_j
-\]
+$$
 
 For memory:
 
-\[
+$$
 M_{\text{used}}+M_{\text{estimated},k}+M_{\text{safety}}
 \le M_{\text{budget}}
-\]
+$$
 
 The reservation must be recorded atomically or protected by a valid lease.
 
@@ -730,17 +998,17 @@ Admission checks should include:
 
 For a simplified single-server queue:
 
-\[
+$$
 \rho=\frac{\lambda_a}{\mu_s}
-\]
+$$
 
-where \(\lambda_a\) is average arrival rate and \(\mu_s\) is average service rate.
+where $\lambda_a$ is average arrival rate and $\mu_s$ is average service rate.
 
 A necessary stability condition for this simplified model is:
 
-\[
+$$
 \rho<1
-\]
+$$
 
 This is not sufficient to prove that a real distributed queue meets its latency targets. Variable job sizes, retries, multiple workers, and provider throttling must be measured.
 
@@ -760,17 +1028,17 @@ Do not accept unlimited jobs while implying immediate execution.
 
 An optional policy score is:
 
-\[
+$$
 S_k=\alpha_pP_k+\alpha_aA_k+\alpha_fF_k-\alpha_cC_k
-\]
+$$
 
 where:
 
-- \(P_k\): configured priority;
-- \(A_k\): age or fairness factor;
-- \(F_k\): deadline urgency;
-- \(C_k\): estimated cost;
-- \(\alpha\): policy weights.
+- $P_k$: configured priority;
+- $A_k$: age or fairness factor;
+- $F_k$: deadline urgency;
+- $C_k$: estimated cost;
+- $\alpha$: policy weights.
 
 Normalize each factor and define starvation prevention. This is a scheduling policy, not a physical law.
 
@@ -780,20 +1048,20 @@ Normalize each factor and define starvation prevention. This is a scheduling pol
 
 ### 6.7.1 Estimated Progress
 
-For work units with weights \(u_i\) and estimated completion \(z_i(t)\in[0,1]\):
+For work units with weights $u_i$ and estimated completion $z_i(t)\in[0,1]$:
 
-\[
+$$
 P(t)=\frac{\sum_i u_i z_i(t)}{\sum_i u_i}
-\]
+$$
 
 For byte-oriented work:
 
-\[
+$$
 P_{\text{bytes}}(t)=
 \frac{\text{reported processed bytes}}{\text{total expected bytes}}
-\]
+$$
 
-Clamp displayed values to the interval \([0,1]\).
+Clamp displayed values to the interval $[0,1]$.
 
 If the total work is unknown, display indeterminate progress instead of inventing a percentage.
 
@@ -801,31 +1069,31 @@ If the total work is unknown, display indeterminate progress instead of inventin
 
 For each unit, count progress only after durable write and validation:
 
-\[
+$$
 C(t)=
 \frac{
 \sum_i u_i\mathbf{1}[\text{unit }i\text{ committed}]
 }{
 \sum_i u_i
 }
-\]
+$$
 
 A worker heartbeat, local buffer write, or temporary output is not proof of durable completion.
 
 ### 6.7.3 Trapezoidal Throughput Integration
 
-For measured throughput \(V_k\) and \(V_{k+1}\) at times \(t_k\) and \(t_{k+1}\):
+For measured throughput $V_k$ and $V_{k+1}$ at times $t_k$ and $t_{k+1}$:
 
-\[
+$$
 \Delta W_k\approx
 \frac{V_k+V_{k+1}}{2}(t_{k+1}-t_k)
-\]
+$$
 
 Then:
 
-\[
+$$
 \widehat W(t_m)=W_0+\sum_{k=0}^{m-1}\Delta W_k
-\]
+$$
 
 This is a numerical estimate. It can overcount if throughput includes retries, repeated bytes, or uncommitted work.
 
@@ -833,11 +1101,11 @@ Use authoritative chunk counters for actual completion and integration for plann
 
 ### 6.7.4 ETA
 
-For remaining work \(W_r\) and robust recent throughput estimate \(\widetilde V\):
+For remaining work $W_r$ and robust recent throughput estimate $\widetilde V$:
 
-\[
+$$
 \text{ETA}\approx\frac{W_r}{\widetilde V}
-\]
+$$
 
 Suppress ETA when throughput is zero, the sample window is too short, or the workload is not comparable.
 
@@ -849,17 +1117,17 @@ Display queue wait separately from execution ETA.
 
 ### 6.8.1 Exponential Backoff
 
-\[
+$$
 d_k=\min(d_{\max},d_0 2^k)\cdot U(1-j,1+j)
-\]
+$$
 
 where:
 
-- \(d_0\): initial delay;
-- \(d_{\max}\): maximum delay;
-- \(k\): retry index;
-- \(j\): jitter fraction;
-- \(U\): uniform random factor.
+- $d_0$: initial delay;
+- $d_{\max}$: maximum delay;
+- $k$: retry index;
+- $j$: jitter fraction;
+- $U$: uniform random factor.
 
 Use a maximum attempt count and a maximum retry time window.
 
@@ -889,25 +1157,25 @@ On restart, verify the checkpoint and input version before resuming.
 
 ### 6.9.1 Object Hash
 
-For object bytes \(B\):
+For object bytes $B$:
 
-\[
+$$
 h=\operatorname{SHA256}(B)
-\]
+$$
 
 A hash allows comparison with a trusted expected digest. It does not independently prove authorship or origin.
 
 ### 6.9.2 Canonical Manifest Hash
 
-For ordered manifest entries \(e_i\):
+For ordered manifest entries $e_i$:
 
-\[
+$$
 H_M=
 \operatorname{SHA256}
 \left(
 \operatorname{CanonicalSerialize}(e_1,\ldots,e_n)
 \right)
-\]
+$$
 
 Canonical serialization must define:
 
@@ -928,11 +1196,11 @@ If authenticity is required, protect expected hashes using signed manifests or a
 
 ### 6.10.1 Mahalanobis Distance
 
-For feature vector \(x\), baseline mean \(\mu\), and covariance matrix \(\Sigma\):
+For feature vector $x$, baseline mean $\mu$, and covariance matrix $\Sigma$:
 
-\[
+$$
 D_M^2(x)=(x-\mu)^\top\Sigma^{-1}(x-\mu)
-\]
+$$
 
 This squared distance is sensitive to feature scaling and covariance quality.
 
@@ -940,16 +1208,16 @@ This squared distance is sensitive to feature scaling and covariance quality.
 
 If covariance is singular or poorly conditioned, use:
 
-\[
+$$
 \Sigma_\lambda=\Sigma+\lambda I
-\]
+$$
 
 Then:
 
-\[
+$$
 D_{M,\lambda}^2(x)=
 (x-\mu)^\top\Sigma_\lambda^{-1}(x-\mu)
-\]
+$$
 
 Select the regularization coefficient through validation or a documented shrinkage method.
 
@@ -957,16 +1225,16 @@ Fit normalization and baseline statistics only on the designated baseline/traini
 
 ### 6.10.3 Threshold Calibration
 
-Do not use a universal hardcoded threshold such as \(0.25\) without validation.
+Do not use a universal hardcoded threshold such as $0.25$ without validation.
 
 Define:
 
-\[
+$$
 \operatorname{flag}(x)=
 \mathbf{1}[D_{M,\lambda}^2(x)>\tau]
-\]
+$$
 
-Choose threshold \(\tau\) based on held-out baseline data and the cost of false alarms versus missed drift.
+Choose threshold $\tau$ based on held-out baseline data and the cost of false alarms versus missed drift.
 
 Track:
 
@@ -984,46 +1252,46 @@ A drift alert triggers investigation or evaluation. It does not prove that retra
 
 ### 6.11.1 Supervised Objective
 
-For dataset \(\{(x_i,y_i)\}_{i=1}^{N}\), model \(f_\theta\), loss \(\ell\), and regularizer \(\Omega\):
+For dataset $\{(x_i,y_i)\}_{i=1}^{N}$, model $f_\theta$, loss $\ell$, and regularizer $\Omega$:
 
-\[
+$$
 J(\theta)=
 \frac{1}{N}\sum_{i=1}^{N}
 \ell(f_\theta(x_i),y_i)
 +\lambda_\Omega\Omega(\theta)
-\]
+$$
 
 ### 6.11.2 Softmax
 
-For logits \(z_{i,c}\):
+For logits $z_{i,c}$:
 
-\[
+$$
 p_{i,c}=
 \frac{e^{z_{i,c}}}
 {\sum_{k=1}^{K}e^{z_{i,k}}}
-\]
+$$
 
 Use numerically stable log-softmax implementations in actual code.
 
 ### 6.11.3 Cross-Entropy
 
-For one-hot or probability targets \(y_{i,c}\):
+For one-hot or probability targets $y_{i,c}$:
 
-\[
+$$
 \ell_i=
 -\sum_{c=1}^{K}
 y_{i,c}\log(\max(p_{i,c},\epsilon))
-\]
+$$
 
-The implementation must define a numerically safe \(\epsilon\) and use a stable loss implementation where available.
+The implementation must define a numerically safe $\epsilon$ and use a stable loss implementation where available.
 
 ### 6.11.4 Gradient Update
 
-For learning rate \(\eta\):
+For learning rate $\eta$:
 
-\[
+$$
 \theta_{t+1}=\theta_t-\eta\nabla_\theta J_t(\theta_t)
-\]
+$$
 
 Record:
 
@@ -1055,22 +1323,22 @@ This equation describes a basic SGD update. The actual implementation may use an
 
 Adding hidden units or parameters does not automatically preserve old model behavior and does not guarantee freedom from catastrophic forgetting.
 
-Let the previous model be \(f_{\theta_0}\) and the candidate be \(f_{\theta_1}\). For regression dataset \(D_{\text{reg}}\):
+Let the previous model be $f_{\theta_0}$ and the candidate be $f_{\theta_1}$. For regression dataset $D_{\text{reg}}$:
 
-\[
+$$
 \Delta_{\text{reg}}=
 \frac{1}{|D_{\text{reg}}|}
 \sum_{x\in D_{\text{reg}}}
 d(f_{\theta_1}(x),f_{\theta_0}(x))
-\]
+$$
 
-where \(d\) is an output-distance measure suitable for the task.
+where $d$ is an output-distance measure suitable for the task.
 
-Define a tolerated regression limit \(\delta\):
+Define a tolerated regression limit $\delta$:
 
-\[
+$$
 \Delta_{\text{reg}}\le\delta
-\]
+$$
 
 This is an empirical gate on the selected evaluation set, not a guarantee for every possible input.
 
@@ -1104,11 +1372,11 @@ If the candidate fails, keep the prior approved model.
 
 ## 6.13 Storage and Quota Accounting
 
-For objects with stored sizes \(s_i\):
+For objects with stored sizes $s_i$:
 
-\[
+$$
 S_{\text{logical}}=\sum_i s_i
-\]
+$$
 
 Physical storage may differ due to compression, deduplication, replication, or provider-specific accounting.
 
@@ -1137,7 +1405,7 @@ Reserve quota before expensive processing and reconcile reservations after compl
 
 ---
 
-# 7. Core Algorithms
+# VII. Core Algorithms
 
 ## 7.1 Deterministic Largest-Remainder Allocation
 
@@ -1221,7 +1489,7 @@ The production implementation must also define empty-input behavior, minimum chu
 
 ---
 
-# 8. API and Module Contracts
+# VIII. API and Module Contracts
 
 The following endpoints are proposed contracts. They must be reconciled with the actual repository before being described as implemented.
 
@@ -1307,7 +1575,7 @@ This is a proposed structure, not a verified description of the current reposito
 
 ---
 
-# 9. Security and Privacy
+# IX. Security and Privacy
 
 ## 9.1 Minimum Controls
 
@@ -1367,7 +1635,7 @@ If such isolation is unavailable, restrict execution to trusted transformations 
 
 ---
 
-# 10. Failure Handling and Recovery
+# X. Failure Handling and Recovery
 
 ## 10.1 Failure Categories
 
@@ -1409,7 +1677,7 @@ Reconciliation must be idempotent and record repairs in the audit log.
 
 ---
 
-# 11. Observability and SLOs
+# XI. Observability and Service Objectives
 
 ## 11.1 API Metrics
 
@@ -1474,7 +1742,7 @@ A valid SLO is tied to a defined workload and observation window.
 
 ---
 
-# 12. Testing and Empirical Verification
+# XII. Verification and Evaluation Methodology
 
 ## 12.1 Test Layers
 
@@ -1493,13 +1761,13 @@ A valid SLO is tied to a defined workload and observation window.
 
 For every valid allocation:
 
-\[
+$$
 \sum_i b_i=S
-\]
+$$
 
-\[
+$$
 b_i\in\mathbb{Z}_{\ge0}
-\]
+$$
 
 ### Partition Correctness
 
@@ -1563,7 +1831,7 @@ Do not replace “Not measured” with estimates presented as facts.
 
 ---
 
-# 13. Deployment and Vercel Constraints
+# XIII. Deployment Constraints
 
 Vercel may be suitable for the frontend and lightweight API/orchestration layer. Suitability for long-running CPU-heavy dataset processing or model training depends on the configured runtime and current platform limits.
 
@@ -1614,7 +1882,7 @@ Do not assume a serverless runtime is a persistent machine or that a background 
 
 ---
 
-# 14. Standards and Traceability
+# XIV. Standards and Traceability
 
 This document may be prepared with reference to practices associated with:
 
@@ -1640,7 +1908,7 @@ Maintain traceability from requirement to design, code, test, and evidence.
 
 ---
 
-# 15. Engineering Assumptions and Limitations
+# XV. Assumptions and Limitations
 
 1. The throughput minimum is a simplified bottleneck model.
 2. CPU cycle estimates vary with runtime, hardware, workload, and contention.
@@ -1661,7 +1929,7 @@ Maintain traceability from requirement to design, code, test, and evidence.
 
 ---
 
-# 16. Implementation Roadmap
+# XVI. Implementation Roadmap
 
 ## Phase A — Correctness Foundation
 
@@ -1716,7 +1984,7 @@ Maintain traceability from requirement to design, code, test, and evidence.
 
 ---
 
-# 17. Equation-to-Code Traceability Matrix
+# XVII. Equation-to-Implementation Traceability
 
 Replace the generic implementation areas with actual source paths and test IDs after repository inspection.
 
@@ -1742,7 +2010,7 @@ Replace the generic implementation areas with actual source paths and test IDs a
 
 ---
 
-# 18. Benchmark Report Template
+# XVIII. Reproducible Benchmark Template
 
 Copy this template for each experiment.
 
@@ -1785,7 +2053,15 @@ A performance claim is approved only when another engineer can reproduce the mea
 
 ---
 
-# 19. References
+# XIX. Conclusion
+
+This paper has specified a resource-aware architecture for coordinating dataset-processing jobs and governed machine-learning experiments. Its principal engineering mechanisms are deterministic byte allocation, bounded resource admission, durable job state, idempotent artifact commits, integrity manifests, checkpoint-based recovery, explicit progress semantics, and evaluation-gated model promotion. The design separates control-plane coordination from data-plane processing and distinguishes a logical temporary workspace from a security boundary supplied by an operating-system sandbox or managed isolation service.
+
+The mathematical expressions provide models and invariants to implement and test; they do not establish measured throughput, production readiness, or the absence of model regression. Those conclusions require reproducible benchmarks, fault-injection tests, security review, source-to-requirement traceability, and recorded evaluation results. Future work should prioritize an implementation audit, deployment-specific capacity calibration, a threat-model review, and publication of raw benchmark evidence.
+
+---
+
+# References
 
 Verify all bibliographic details and exact editions before formal publication.
 
@@ -1804,24 +2080,3 @@ Record access dates and version numbers for online technical documentation.
 > **Citation hygiene:** Do not use uncertain bibliographic details as verified references. A reference must support the specific claim for which it is cited. Verify titles, authors, publication venues, years, pages, DOIs, and standard editions before academic submission.
 
 ---
-
-# Final Engineering Statement
-
-This specification establishes a structured basis for implementing and verifying PULSE + VDC, including:
-
-- byte-accurate chunk allocation;
-- resource admission and scheduling;
-- progress semantics;
-- retry and recovery behavior;
-- integrity manifests;
-- drift detection;
-- ML evaluation and model promotion;
-- storage quotas;
-- security boundaries;
-- observability;
-- deployment constraints;
-- testing and traceability.
-
-It is an engineering specification, not proof of implementation or experimental success.
-
-Describe the system as implemented, benchmarked, securely isolated, standards-conformant, or production-ready only when the corresponding source-code review, test results, benchmark evidence, security assessment, or compliance review exists.
