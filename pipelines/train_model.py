@@ -85,11 +85,14 @@ def train(
     X_train_norm = (X_train - mean) / std
     X_val_norm = (X_val - mean) / std
 
+    # Determine number of classes (at least 2 for binary classification)
+    num_classes = max(2, int(np.max(y)) + 1 if len(y) > 0 else 2)
+
     # Instantiate model & trainer
     model = AdaptiveClassifier(
         input_dim=len(feature_names),
         hidden_dim=hidden_dim,
-        output_dim=len(np.unique(y)),
+        output_dim=num_classes,
     )
     trainer = SelfEvolvingTrainer(model=model, learning_rate=lr)
 

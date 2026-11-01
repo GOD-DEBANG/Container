@@ -493,6 +493,12 @@ class PulseASGIApp:
                 break
         raw_body = b"".join(body_chunks)
 
+        # Static UI Assets
+        if path.startswith("/ui/"):
+            await self._send_static_ui(send, path)
+            metrics.record_latency("http_request_duration", time.perf_counter() - t_start)
+            return
+
         # Enforce body size limit
         try:
             ServerAdmissionController.validate_request_body_size(len(raw_body))
@@ -688,253 +694,41 @@ class PulseASGIApp:
                 })
         await send({"type": "http.response.body", "body": b"", "more_body": False})
 
+    async def _send_static_ui(self, send: Callable, path: str) -> None:
+        """Serves UI/UX static files (CSS, JS) from Server/src/pulse/ui."""
+        from pathlib import Path
+        ui_root = Path(__file__).resolve().parent / "ui"
+        file_name = path.replace("/ui/", "").strip("/")
+        file_path = ui_root / file_name
+
+        if not file_path.exists() or not file_path.is_file():
+            await self._send_json_error(send, PulseError("UI Asset not found", details={"status_code": 404}))
+            return
+
+        content_types = {
+            ".css": "text/css; charset=utf-8",
+            ".js": "application/javascript; charset=utf-8",
+            ".html": "text/html; charset=utf-8",
+        }
+        content_type = content_types.get(file_path.suffix.lower(), "application/octet-stream")
+        content = file_path.read_bytes()
+
+        headers = [
+            (b"content-type", content_type.encode("latin1")),
+            (b"content-length", str(len(content)).encode("latin1")),
+            (b"access-control-allow-origin", b"*"),
+        ]
+        await send({"type": "http.response.start", "status": 200, "headers": headers})
+        await send({"type": "http.response.body", "body": content})
+
     async def _send_html_dashboard(self, send: Callable) -> None:
-        html = """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PULSE Scientific Hub & Control Center</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #090d16;
-      --card-bg: rgba(18, 24, 38, 0.75);
-      --card-border: rgba(255, 255, 255, 0.08);
-      --accent: #6366f1;
-      --accent-glow: rgba(99, 102, 241, 0.25);
-      --accent-2: #06b6d4;
-      --text: #f1f5f9;
-      --text-muted: #94a3b8;
-      --success: #10b981;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: radial-gradient(circle at 15% 15%, #131b31 0%, var(--bg) 60%);
-      color: var(--text);
-      font-family: 'Outfit', sans-serif;
-      min-height: 100vh;
-      padding: 2rem;
-    }
-    .container { max-width: 1200px; margin: 0 auto; }
-    header {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--card-border);
-    }
-    .badge {
-      display: inline-flex; align-items: center; gap: 0.5rem;
-      padding: 0.35rem 0.85rem; border-radius: 999px;
-      background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);
-      color: var(--success); font-size: 0.85rem; font-weight: 500;
-    }
-    .badge::before {
-      content: ""; width: 8px; height: 8px; border-radius: 50%;
-      background: var(--success); box-shadow: 0 0 8px var(--success);
-    }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
-    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
-    .card {
-      background: var(--card-bg);
-      backdrop-filter: blur(12px);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 1.75rem;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    }
-    .card h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; color: #fff; }
-    label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.35rem; }
-    input, select {
-      width: 100%; background: #0f1523; border: 1px solid var(--card-border);
-      padding: 0.75rem 1rem; border-radius: 10px; color: #fff;
-      font-family: inherit; font-size: 0.95rem; margin-bottom: 1rem;
-      outline: none; transition: border 0.2s, box-shadow 0.2s;
-    }
-    input:focus, select:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
-    }
-    .btn {
-      width: 100%; background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      color: #fff; border: none; padding: 0.85rem; border-radius: 10px;
-      font-weight: 600; font-size: 1rem; cursor: pointer;
-      box-shadow: 0 4px 15px var(--accent-glow); transition: transform 0.15s, opacity 0.2s;
-    }
-    .btn:hover { opacity: 0.92; transform: translateY(-1px); }
-    .btn:active { transform: translateY(0); }
-    table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
-    th, td { text-align: left; padding: 0.85rem; border-bottom: 1px solid var(--card-border); font-size: 0.9rem; }
-    th { color: var(--text-muted); font-weight: 500; font-size: 0.8rem; text-transform: uppercase; }
-    .link-btn {
-      color: var(--accent-2); text-decoration: none; font-weight: 500; margin-right: 0.75rem;
-      transition: color 0.15s;
-    }
-    .link-btn:hover { color: #fff; text-decoration: underline; }
-    .code-box {
-      background: #0b0f19; border: 1px solid var(--card-border); border-radius: 8px;
-      padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
-      color: #38bdf8; overflow-x: auto; max-height: 200px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <header>
-      <div>
-        <h1 style="font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px;">PULSE Control Center</h1>
-        <p style="color: var(--text-muted); font-size: 0.95rem;">Virtual Container Engine & Scientific Dataset Hub</p>
-      </div>
-      <div class="badge">SERVER HEALTHY</div>
-    </header>
+        from pathlib import Path
+        ui_index = Path(__file__).resolve().parent / "ui" / "index.html"
+        if ui_index.exists():
+            body = ui_index.read_bytes()
+        else:
+            body = b"<h1>UI not found</h1>"
 
-    <div class="grid">
-      <!-- Dataset Generator Form -->
-      <div class="card">
-        <h2>⚡ Generate New Dataset</h2>
-        <form id="genForm">
-          <label>Dataset Name</label>
-          <input type="text" id="name" placeholder="e.g. cluster_telemetry_v1" required>
-
-          <label>Modality</label>
-          <select id="modality">
-            <option value="numeric_telemetry">Numeric Telemetry (CPU, memory, IO, latency)</option>
-            <option value="container_execution_trace">Container Execution Trace (Chunks, heap, swap)</option>
-            <option value="server_event_stream">Server Event Stream (Req/s, SSE, p99 ms)</option>
-          </select>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div>
-              <label>Record Count</label>
-              <input type="number" id="records" value="1000" min="10" max="100000">
-            </div>
-            <div>
-              <label>Anomaly Ratio (e.g. 0.05)</label>
-              <input type="number" id="anomaly" value="0.05" step="0.01" min="0.001" max="0.5">
-            </div>
-          </div>
-
-          <label>Drift Factor (0.0 to 1.0)</label>
-          <input type="number" id="drift" value="0.05" step="0.01" min="0" max="1.0">
-
-          <button type="submit" class="btn" id="genBtn">Synthesize Dataset</button>
-        </form>
-        <div id="genMsg" style="margin-top: 1rem; display: none;"></div>
-      </div>
-
-      <!-- Quick Server Info -->
-      <div class="card">
-        <h2>📊 Server Status & Live Links</h2>
-        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
-          <div style="display:flex; justify-content: space-between; padding-bottom: 0.5rem; border-bottom: 1px solid var(--card-border);">
-            <span style="color: var(--text-muted);">Root API:</span>
-            <a href="/" target="_blank" class="link-btn">GET /</a>
-          </div>
-          <div style="display:flex; justify-content: space-between; padding-bottom: 0.5rem; border-bottom: 1px solid var(--card-border);">
-            <span style="color: var(--text-muted);">Health Check:</span>
-            <a href="/api/v1/health" target="_blank" class="link-btn">GET /api/v1/health</a>
-          </div>
-          <div style="display:flex; justify-content: space-between; padding-bottom: 0.5rem; border-bottom: 1px solid var(--card-border);">
-            <span style="color: var(--text-muted);">List Datasets API:</span>
-            <a href="/api/v1/datasets" target="_blank" class="link-btn">GET /api/v1/datasets</a>
-          </div>
-        </div>
-        <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem;">Live CLI Command</h3>
-        <div class="code-box">.\\.venv\\Scripts\\python.exe pipelines/create_dataset.py -i</div>
-      </div>
-    </div>
-
-    <!-- Generated Datasets Table -->
-    <div class="card">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h2>📁 Stored Datasets (Convex & Local Store)</h2>
-        <button onclick="fetchDatasets()" style="background: none; border: 1px solid var(--card-border); color: #fff; padding: 0.35rem 0.75rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">🔄 Refresh</button>
-      </div>
-      <div style="overflow-x: auto;">
-        <table id="datasetTable">
-          <thead>
-            <tr>
-              <th>Dataset Name</th>
-              <th>Size</th>
-              <th>Downloads</th>
-            </tr>
-          </thead>
-          <tbody id="datasetRows">
-            <tr><td colspan="3" style="text-align: center; color: var(--text-muted);">Loading datasets...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    async function fetchDatasets() {
-      try {
-        const res = await fetch('/api/v1/datasets');
-        const data = await res.json();
-        const rows = document.getElementById('datasetRows');
-        const list = data.payload?.datasets || [];
-        if (!list.length) {
-          rows.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No datasets found. Create one above!</td></tr>';
-          return;
-        }
-        rows.innerHTML = list.map(d => `
-          <tr>
-            <td style="font-weight: 500;">${d.name}</td>
-            <td style="color: var(--text-muted);">${(d.size_bytes / 1024).toFixed(1)} KB</td>
-            <td>
-              <a class="link-btn" href="${d.download_csv}" download>📥 Download CSV</a>
-              <a class="link-btn" href="${d.download_json}" download>📥 Download JSON</a>
-            </td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    document.getElementById('genForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = document.getElementById('genBtn');
-      const msg = document.getElementById('genMsg');
-      btn.disabled = true;
-      btn.innerText = 'Synthesizing...';
-      msg.style.display = 'none';
-
-      try {
-        const res = await fetch('/api/v1/datasets/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            dataset_name: document.getElementById('name').value,
-            modality: document.getElementById('modality').value,
-            target_records: parseInt(document.getElementById('records').value),
-            anomaly_ratio: parseFloat(document.getElementById('anomaly').value),
-            drift_factor: parseFloat(document.getElementById('drift').value),
-          })
-        });
-        const result = await res.json();
-        msg.style.display = 'block';
-        if (result.payload?.records_generated) {
-          msg.innerHTML = `<div style="background: rgba(16,185,129,0.15); border: 1px solid var(--success); color: var(--success); padding: 0.75rem; border-radius: 8px; font-size: 0.9rem;">
-            Successfully generated <b>${result.payload.records_generated}</b> records for <b>${result.payload.dataset_name}</b>!
-          </div>`;
-          fetchDatasets();
-        } else {
-          msg.innerHTML = `<div style="color: #ef4444; font-size: 0.9rem;">Error generating dataset: ${result.message || 'Unknown error'}</div>`;
-        }
-      } catch (err) {
-        msg.style.display = 'block';
-        msg.innerHTML = `<div style="color: #ef4444; font-size: 0.9rem;">Failed: ${err.message}</div>`;
-      } finally {
-        btn.disabled = false;
-        btn.innerText = 'Synthesize Dataset';
-      }
-    });
-
-    fetchDatasets();
-  </script>
-</body>
-</html>"""
-        body = html.encode("utf-8")
         headers = [
             (b"content-type", b"text/html; charset=utf-8"),
             (b"content-length", str(len(body)).encode("latin1")),

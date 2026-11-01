@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PULSE & VDC Hub | Scientific Control & ML Center</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="brand-icon">⚡</div>
+        <div>
+          <h1>PULSE & VDC Scientific Control Center</h1>
+          <p>Multi-Modality Synthetic Dataset Engine & Neural Architecture Feedback</p>
+        </div>
+      </div>
+      <div class="badge">SYSTEM READY</div>
+    </header>
+
+    <!-- Top Grid: Dataset Synthesis & ML Training -->
+    <div class="grid">
+      <!-- 1. Dataset Generator Form -->
+      <div class="card">
+        <h2>⚡ Synthesize New Dataset</h2>
+        <form id="genForm">
+          <label>Dataset Name</label>
+          <input type="text" id="name" placeholder="e.g. cluster_telemetry_v1" required>
+
+          <label>Modality</label>
+          <select id="modality">
+            <option value="numeric_telemetry">Numeric Telemetry (CPU, memory, IO, latency)</option>
+            <option value="container_execution_trace">Container Execution Trace (Chunks, heap, swap)</option>
+            <option value="server_event_stream">Server Event Stream (Req/s, SSE, p99 ms)</option>
+          </select>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+              <label>Record Count</label>
+              <input type="number" id="records" value="1000" min="10" max="100000">
+            </div>
+            <div>
+              <label>Anomaly Ratio</label>
+              <input type="number" id="anomaly" value="0.05" step="0.01" min="0.001" max="0.5">
+            </div>
+          </div>
+
+          <label>Drift Factor (0.0 to 1.0)</label>
+          <input type="number" id="drift" value="0.05" step="0.01" min="0" max="1.0">
+
+          <button type="submit" class="btn" id="genBtn">⚡ Synthesize Dataset</button>
+        </form>
+        <div id="genMsg" style="display: none;"></div>
+      </div>
+
+      <!-- 2. Machine Learning Training Station -->
+      <div class="card">
+        <h2>🧠 Train Adaptive Neural Model</h2>
+        <form id="trainForm">
+          <label>Target Dataset for Training</label>
+          <select id="trainDatasetSelect">
+            <option value="">Loading datasets...</option>
+          </select>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+              <label>Epochs</label>
+              <input type="number" id="trainEpochs" value="25" min="1" max="500">
+            </div>
+            <div>
+              <label>Learning Rate</label>
+              <input type="number" id="trainLr" value="0.05" step="0.01" min="0.0001" max="1.0">
+            </div>
+          </div>
+
+          <button type="submit" class="btn" id="trainBtn" style="background: linear-gradient(135deg, #06b6d4, #0284c7);">
+            🧠 Train Neural Model
+          </button>
+        </form>
+        <div id="trainMsg" style="display: none;"></div>
+      </div>
+    </div>
+
+    <!-- Bottom Grid: Realtime Inference & Server Operations -->
+    <div class="grid">
+      <!-- 3. Realtime Neural Inference / Anomaly Detector -->
+      <div class="card">
+        <h2>🔍 Realtime Workload Anomaly Predictor</h2>
+        <form id="inferForm">
+          <label>Model Weights Source</label>
+          <select id="inferDatasetSelect">
+            <option value="">Loading datasets...</option>
+          </select>
+
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem;">
+            <div>
+              <label>CPU Utilization</label>
+              <input type="number" id="f_cpu" value="0.45" step="0.01">
+            </div>
+            <div>
+              <label>Memory Pressure</label>
+              <input type="number" id="f_mem" value="0.52" step="0.01">
+            </div>
+            <div>
+              <label>I/O Throughput</label>
+              <input type="number" id="f_io" value="0.30" step="0.01">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div>
+              <label>Latency Z-Score</label>
+              <input type="number" id="f_lat" value="0.10" step="0.01">
+            </div>
+            <div>
+              <label>Queue Depth</label>
+              <input type="number" id="f_queue" value="0.20" step="0.01">
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-secondary" id="inferBtn">
+            ⚡ Evaluate Vector
+          </button>
+        </form>
+        <div id="inferResult" class="card" style="display: none; margin-top: 1rem; padding: 1rem; background: #060910;"></div>
+      </div>
+
+      <!-- 4. Quick Server Links & CLI Commands -->
+      <div class="card">
+        <h2>📊 Server Status & Direct Links</h2>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
+          <div style="display:flex; justify-content: space-between; padding-bottom: 0.5rem; border-bottom: 1px solid var(--card-border);">
+            <span style="color: var(--text-muted);">Root API:</span>
+            <a href="/" target="_blank" class="link-btn">GET /</a>
+          </div>
+          <div style="display:flex; justify-content: space-between; padding-bottom: 0.5rem; border-bottom: 1px solid var(--card-border);">
+            <span style="color: var(--text-muted);">Health Check:</span>
+            <a href="/api/v1/health" target="_blank" class="link-btn">GET /api/v1/health</a>
+          </div>
+          <div style="display:flex; justify-content: space-between; padding-bottom: 0.5rem; border-bottom: 1px solid var(--card-border);">
+            <span style="color: var(--text-muted);">Datasets API:</span>
+            <a href="/api/v1/datasets" target="_blank" class="link-btn">GET /api/v1/datasets</a>
+          </div>
+        </div>
+        <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem;">CLI Batch Pipeline</h3>
+        <div class="code-box">python pipelines/create_dataset.py --name telemetry_v1 --records 1000</div>
+      </div>
+    </div>
+
+    <!-- Stored Datasets Table -->
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2>📁 Stored Datasets (Convex & Local Data Store)</h2>
+        <button onclick="fetchDatasets()" class="btn-secondary" style="padding: 0.4rem 0.85rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem; width: auto;">
+          🔄 Refresh
+        </button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Dataset Name</th>
+            <th>File Size</th>
+            <th>Download Options</th>
+          </tr>
+        </thead>
+        <tbody id="datasetTableBody">
+          <tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Loading records...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/ui/app.js"></script>
+</body>
+</html>
+
