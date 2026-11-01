@@ -32,6 +32,11 @@ class PulseConfig:
         except Exception:
             secret_key = secret_hex.encode("utf-8")[:32].ljust(32, b"0")
 
+        # In serverless cloud environments (like Vercel / AWS Lambda), the filesystem is read-only
+        # except for /tmp. Auto-detect Vercel environment to prevent permission crashes.
+        is_serverless = os.getenv("VERCEL") == "1" or os.getenv("AWS_LAMBDA_FUNCTION_NAME") is not None
+        default_storage = "/tmp/pulse_storage" if is_serverless else "data/storage"
+
         return cls(
             env=env_mode,
             host=os.getenv("PULSE_HOST", "0.0.0.0"),
@@ -41,7 +46,7 @@ class PulseConfig:
             backend=os.getenv("VDC_EXECUTION_BACKEND", "INLINE").upper(),
             max_inline_dataset_bytes=int(os.getenv("VDC_INLINE_MAX_DATASET_BYTES", "268435456")),
             max_execution_duration_seconds=float(os.getenv("VDC_INLINE_MAX_DURATION_SECONDS", "120")),
-            storage_root=os.getenv("VDC_STORAGE_ROOT", "data/storage"),
+            storage_root=os.getenv("VDC_STORAGE_ROOT", default_storage),
             redis_url=os.getenv("UPSTASH_REDIS_URL") or None,
         )
 
