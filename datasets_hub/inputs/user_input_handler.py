@@ -38,7 +38,19 @@ class DatasetInputHandler:
             modality = DatasetModality.NUMERIC_TELEMETRY
 
         drift = float(params.get("drift_factor", 0.0))
-        anomaly_ratio = float(params.get("anomaly_ratio", 0.05))
+        # Auto-normalize drift if user entered percentage (> 1.0)
+        if drift > 1.0:
+            drift = min(drift / 100.0 if drift <= 100.0 else 1.0, 1.0)
+        drift = max(0.0, min(1.0, drift))
+
+        anomaly_in = float(params.get("anomaly_ratio", 0.05))
+        # Auto-convert percentage inputs (e.g., 2 -> 0.02, 5 -> 0.05, 8 -> 0.08)
+        if anomaly_in > 1.0:
+            anomaly_ratio = anomaly_in / 100.0
+        else:
+            anomaly_ratio = anomaly_in
+        anomaly_ratio = max(0.001, min(0.50, anomaly_ratio))
+
         seed = int(params.get("seed", 42))
 
         return DatasetInputSpec(
@@ -74,17 +86,17 @@ class DatasetInputHandler:
         }
         modality = mod_map.get(mod_choice, DatasetModality.NUMERIC_TELEMETRY)
 
-        drift_in = input("4. Drift Factor (0.0 = baseline, 1.0 = heavy drift) [default: 0.0]: ").strip()
+        drift_in = input("4. Drift Factor (0.0 to 1.0 or % e.g. 8 for 8%) [default: 0.0]: ").strip()
         drift = float(drift_in) if drift_in else 0.0
 
-        anomaly_in = input("5. Anomaly Ratio (e.g. 0.08 for 8%) [default: 0.05]: ").strip()
-        anomaly_ratio = float(anomaly_in) if anomaly_in else 0.05
+        anomaly_in = input("5. Anomaly Ratio (e.g. 0.05 or 5 for 5%) [default: 0.05]: ").strip()
+        anomaly = float(anomaly_in) if anomaly_in else 0.05
 
-        return DatasetInputSpec(
-            dataset_name=name,
-            target_records=records,
-            modality=modality,
-            drift_factor=drift,
-            anomaly_ratio=anomaly_ratio,
-            seed=42,
-        )
+        return cls.create_spec_from_dict({
+            "dataset_name": name,
+            "target_records": records,
+            "modality": modality.value,
+            "drift_factor": drift,
+            "anomaly_ratio": anomaly,
+            "seed": 42,
+        })

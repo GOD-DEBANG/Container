@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["Server/tests", "ml/tests"]
+pythonpath = ["Server/src", "."]
+asyncio_mode = "auto"
+markers = [
+    "asyncio: mark test as async coroutine",
+]
+addopts = "-v"
+

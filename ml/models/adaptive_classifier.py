@@ -63,3 +63,34 @@ class AdaptiveClassifier:
 
         self.hidden_dim = new_hidden_dim
         self.architecture_version += 1
+
+    def save(self, filepath: str | Any) -> None:
+        """Persists model parameters, dimensions, and version to disk."""
+        from pathlib import Path
+        p = Path(filepath)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(
+            p,
+            W1=self.W1,
+            b1=self.b1,
+            W2=self.W2,
+            b2=self.b2,
+            meta=np.array([self.input_dim, self.hidden_dim, self.output_dim, self.architecture_version])
+        )
+
+    @classmethod
+    def load(cls, filepath: str | Any) -> "AdaptiveClassifier":
+        """Loads model weights, capacity, and dimensions from a saved file."""
+        from pathlib import Path
+        p = Path(filepath)
+        data = np.load(p, allow_pickle=True)
+        meta = data["meta"]
+        input_dim, hidden_dim, output_dim, arch_ver = int(meta[0]), int(meta[1]), int(meta[2]), int(meta[3])
+
+        model = cls(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim)
+        model.W1 = data["W1"]
+        model.b1 = data["b1"]
+        model.W2 = data["W2"]
+        model.b2 = data["b2"]
+        model.architecture_version = arch_ver
+        return model

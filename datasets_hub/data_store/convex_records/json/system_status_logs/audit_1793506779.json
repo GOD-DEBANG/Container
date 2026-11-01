@@ -1,0 +1,26 @@
+{
+  "record_id": "audit_1793506779",
+  "table": "system_status_logs",
+  "metadata": {
+    "overall_status": "OPERATIONAL"
+  },
+  "total_records": 2,
+  "data": [
+    {
+      "subsystem": "VirtualContainer",
+      "status": "HEALTHY",
+      "latency_ms": 212.28,
+      "throughput_bps": 1357246.4091470474,
+      "error": "none",
+      "timestamp": 1793506778.554457
+    },
+    {
+      "subsystem": "PulseServer",
+      "status": "HEALTHY",
+      "latency_ms": 270.37,
+      "throughput_bps": 0,
+      "error": "none",
+      "timestamp": 1793506778.767187
+    }
+  ]
+}
