@@ -19,8 +19,12 @@ dependencies = [
     "numpy>=1.26.0",
 ]
 
+[tool.setuptools.packages.find]
+include = ["api*", "Server*", "vdc*", "ml*", "datasets_hub*"]
+namespaces = true
+
 [tool.vercel]
-entrypoint = "Server.src.pulse.app:app"
+entrypoint = "api.index:app"
 
 [tool.pytest.ini_options]
 minversion = "8.0"
